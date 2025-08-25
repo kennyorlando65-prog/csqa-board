@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CSQA Board</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px 0;
+      width: 100%;
+      font-size: 16px;
+    }
+    .question {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    .answer {
+      margin-left: 20px;
+      background: #e8f5e9;
+      padding: 10px;
+      border-left: 3px solid #4caf50;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+    .upvote {
+      color: #4caf50;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>CSQA Board</h2>
+
+  <input type="text" id="username" placeholder="Your name">
+  <input type="text" id="questionInput" placeholder="Type your question here...">
+  <button onclick="postQuestion()">Post Question</button>
+
+  <hr>
+  <div id="questionsList"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAg77QkSlVnxjAnA_AcpaLIUHnvWgMm6Xo",
+      authDomain: "csgroupqa.firebaseapp.com",
+      databaseURL: "https://csgroupqa-default-rtdb.firebaseio.com",
+      projectId: "csgroupqa",
+      storageBucket: "csgroupqa.firebasestorage.app",
+      messagingSenderId: "761263870577",
+      appId: "1:761263870577:web:d914ef6e6d8f52785141d0",
+      measurementId: "G-Z7MGC428NW"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function postQuestion() {
+      const username = document.getElementById("username").value.trim();
+      const question = document.getElementById("questionInput").value.trim();
+      const timestamp = new Date().toISOString();
+
+      if (username && question) {
+        const newRef = db.ref("questions").push();
+        newRef.set({
+          question,
+          username,
+          timestamp,
+          answers: {}
+        });
+        document.getElementById("questionInput").value = "";
+      }
+    }
+
+    function postAnswer(qId) {
+      const replyInput = document.getElementById(`answerInput-${qId}`);
+      const replyText = replyInput.value.trim();
+      const username = document.getElementById("username").value.trim();
+      const timestamp = new Date().toISOString();
+
+      if (replyText && username) {
+        db.ref(`questions/${qId}/answers`).push({
+          text: replyText,
+          username,
+          timestamp,
+          upvotes: 0
+        });
+        replyInput.value = "";
+      }
+    }
+
+    function upvoteAnswer(qId, aId) {
+      const ref = db.ref(`questions/${qId}/answers/${aId}/upvotes`);
+      ref.transaction(v => (v || 0) + 1);
+    }
+
+    db.ref("questions").on("value", snapshot => {
+      const container = document.getElementById("questionsList");
+      container.innerHTML = "";
+
+      snapshot.forEach(qSnap => {
+        const q = qSnap.val();
+        const qId = qSnap.key;
+
+        let html = `<div class="question">
+          <strong>${q.question}</strong><br>
+          <em>${q.username} · ${new Date(q.timestamp).toLocaleString()}</em><br><br>
+          <input type="text" id="answerInput-${qId}" placeholder="Type your answer...">
+          <button onclick="postAnswer('${qId}')">Reply</button>`;
+
+        if (q.answers) {
+          Object.entries(q.answers).forEach(([aId, a]) => {
+            html += `<div class="answer">
+              ${a.text}<br>
+              <em>${a.username} · ${new Date(a.timestamp).toLocaleString()}</em>
+              <span class="upvote" onclick="upvoteAnswer('${qId}', '${aId}')">👍 ${a.upvotes || 0}</span>
+            </div>`;
+          });
+        }
+
+        html += `</div>`;
+        container.innerHTML += html;
+      });
+    });
+  </script>
+
+</body>
+</html>
