@@ -1,55 +1,70 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>CSQA Board</title>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <title>CSQA Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f4f4f4;
-    }
-    input, button {
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+    input, button, textarea {
       padding: 8px;
       margin: 5px 0;
       width: 100%;
       font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
     }
-    .question {
-      background: #fff;
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+    }
+    .question, .answer {
+      background: white;
       padding: 15px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       border-radius: 8px;
       box-shadow: 0 0 5px rgba(0,0,0,0.1);
     }
     .answer {
       margin-left: 20px;
       background: #e8f5e9;
-      padding: 10px;
       border-left: 3px solid #4caf50;
-      border-radius: 6px;
-      margin-top: 10px;
     }
     .upvote {
       color: #4caf50;
       cursor: pointer;
       margin-left: 10px;
     }
+    #leaderboard {
+      background: #f0f4ff;
+      padding: 1em;
+      border-radius: 8px;
+      margin-top: 2em;
+    }
+    #leaderboard-list li {
+      font-size: 1.1em;
+      margin: 0.3em 0;
+    }
   </style>
 </head>
 <body>
-
   <h2>CSQA Board</h2>
-
   <input type="text" id="username" placeholder="Your name">
   <input type="text" id="questionInput" placeholder="Type your question here...">
   <button onclick="postQuestion()">Post Question</button>
-
   <hr>
   <div id="questionsList"></div>
+
+  <div id="leaderboard">
+    <h2>🏆 Top Contributors</h2>
+    <ul id="leaderboard-list"></ul>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <script>
     const firebaseConfig = {
@@ -57,10 +72,9 @@
       authDomain: "csgroupqa.firebaseapp.com",
       databaseURL: "https://csgroupqa-default-rtdb.firebaseio.com",
       projectId: "csgroupqa",
-      storageBucket: "csgroupqa.firebasestorage.app",
+      storageBucket: "csgroupqa.appspot.com",
       messagingSenderId: "761263870577",
-      appId: "1:761263870577:web:d914ef6e6d8f52785141d0",
-      measurementId: "G-Z7MGC428NW"
+      appId: "1:761263870577:web:d914ef6e6d8f52785141d0"
     };
 
     firebase.initializeApp(firebaseConfig);
@@ -73,12 +87,13 @@
 
       if (username && question) {
         const newRef = db.ref("questions").push();
-        newRef.set({
-          question,
-          username,
-          timestamp,
-          answers: {}
-        });
+        newRef.set({ question, username, timestamp, answers: {} });
+
+        // Update leaderboard stats
+        const userRef = db.ref("users/" + username);
+        userRef.child("questionsAsked").transaction(q => (q || 0) + 1);
+        userRef.child("name").set(username);
+
         document.getElementById("questionInput").value = "";
       }
     }
@@ -100,40 +115,70 @@
       }
     }
 
-    function upvoteAnswer(qId, aId) {
+    function upvoteAnswer(qId, aId, answerUser) {
       const ref = db.ref(`questions/${qId}/answers/${aId}/upvotes`);
       ref.transaction(v => (v || 0) + 1);
+
+      // Update leaderboard stats
+      const userRef = db.ref("users/" + answerUser);
+      userRef.child("upvotesReceived").transaction(u => (u || 0) + 1);
     }
 
-    db.ref("questions").on("value", snapshot => {
-      const container = document.getElementById("questionsList");
-      container.innerHTML = "";
+    function loadQuestions() {
+      db.ref("questions").on("value", snapshot => {
+        const container = document.getElementById("questionsList");
+        container.innerHTML = "";
 
-      snapshot.forEach(qSnap => {
-        const q = qSnap.val();
-        const qId = qSnap.key;
+        snapshot.forEach(qSnap => {
+          const q = qSnap.val();
+          const qId = qSnap.key;
 
-        let html = `<div class="question">
-          <strong>${q.question}</strong><br>
-          <em>${q.username} · ${new Date(q.timestamp).toLocaleString()}</em><br><br>
-          <input type="text" id="answerInput-${qId}" placeholder="Type your answer...">
-          <button onclick="postAnswer('${qId}')">Reply</button>`;
+          let html = `<div class="question">
+            <strong>${q.question}</strong><br>
+            <em>${q.username} · ${new Date(q.timestamp).toLocaleString()}</em><br><br>
+            <input type="text" id="answerInput-${qId}" placeholder="Type your answer...">
+            <button onclick="postAnswer('${qId}')">Reply</button>`;
 
-        if (q.answers) {
-          Object.entries(q.answers).forEach(([aId, a]) => {
-            html += `<div class="answer">
-              ${a.text}<br>
-              <em>${a.username} · ${new Date(a.timestamp).toLocaleString()}</em>
-              <span class="upvote" onclick="upvoteAnswer('${qId}', '${aId}')">👍 ${a.upvotes || 0}</span>
-            </div>`;
-          });
-        }
+          if (q.answers) {
+            Object.entries(q.answers).forEach(([aId, a]) => {
+              html += `<div class="answer">
+                ${a.text}<br>
+                <em>${a.username} · ${new Date(a.timestamp).toLocaleString()}</em>
+                <span class="upvote" onclick="upvoteAnswer('${qId}', '${aId}', '${a.username}')">👍 ${a.upvotes || 0}</span>
+              </div>`;
+            });
+          }
 
-        html += `</div>`;
-        container.innerHTML += html;
+          html += `</div>`;
+          container.innerHTML += html;
+        });
       });
-    });
-  </script>
+    }
 
+    function loadLeaderboard() {
+      db.ref("users").once("value", snapshot => {
+        const users = [];
+        snapshot.forEach(userSnap => {
+          const data = userSnap.val();
+          const score = (data.questionsAsked || 0) + (data.upvotesReceived || 0) * 2;
+          users.push({ name: data.name, score });
+        });
+
+        users.sort((a, b) => b.score - a.score);
+        const list = document.getElementById("leaderboard-list");
+        list.innerHTML = "";
+        users.slice(0, 5).forEach((user, index) => {
+          const li = document.createElement("li");
+          li.textContent = `#${index + 1} ${user.name} — ${user.score} pts`;
+          list.appendChild(li);
+        });
+      });
+    }
+
+    window.onload = function() {
+      loadQuestions();
+      loadLeaderboard();
+    };
+  </script>
 </body>
 </html>
