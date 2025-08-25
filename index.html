@@ -1,4 +1,4 @@
-<!DOCTYPE html
+<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -35,33 +35,44 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // Sanitize input to prevent XSS
+    function sanitize(text) {
+      return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
     function postQuestion() {
-      const username = document.getElementById("username").value.trim();
-      const question = document.getElementById("questionInput").value.trim();
+      const username = sanitize(document.getElementById("username").value.trim());
+      const question = sanitize(document.getElementById("questionInput").value.trim());
       const timestamp = new Date().toISOString();
 
-      if (username && question) {
-        const newRef = db.ref("questions").push();
-        newRef.set({ question, username, timestamp, answers: {} });
-        document.getElementById("questionInput").value = "";
+      if (!username || !question) {
+        alert("Please enter your name and question before posting.");
+        return;
       }
+
+      const newRef = db.ref("questions").push();
+      newRef.set({ question, username, timestamp, answers: {} });
+      document.getElementById("questionInput").value = "";
     }
 
     function postAnswer(qId) {
       const replyInput = document.getElementById(`answerInput-${qId}`);
-      const replyText = replyInput.value.trim();
-      const username = document.getElementById("username").value.trim();
+      const replyText = sanitize(replyInput.value.trim());
+      const username = sanitize(document.getElementById("username").value.trim());
       const timestamp = new Date().toISOString();
 
-      if (replyText && username) {
-        db.ref(`questions/${qId}/answers`).push({
-          text: replyText,
-          username,
-          timestamp,
-          upvotes: 0
-        });
-        replyInput.value = "";
+      if (!replyText || !username) {
+        alert("Please enter your name and reply before posting.");
+        return;
       }
+
+      db.ref(`questions/${qId}/answers`).push({
+        text: replyText,
+        username,
+        timestamp,
+        upvotes: 0
+      });
+      replyInput.value = "";
     }
 
     function upvoteAnswer(qId, aId) {
@@ -78,8 +89,8 @@
         const qId = qSnap.key;
 
         let html = `<div class="question">
-          <strong>${q.question}</strong><br>
-          <em>${q.username} · ${new Date(q.timestamp).toLocaleString()}</em><br><br>
+          <strong>${q.question || "undefined"}</strong><br>
+          <em>${q.username || "Anonymous"} · ${q.timestamp ? new Date(q.timestamp).toLocaleString() : "Invalid Date"}</em><br><br>
           <input type="text" id="answerInput-${qId}" placeholder="Type your answer...">
           <button onclick="postAnswer('${qId}')">Reply</button>`;
 
@@ -87,7 +98,7 @@
           Object.entries(q.answers).forEach(([aId, a]) => {
             html += `<div class="answer">
               ${a.text}<br>
-              <em>${a.username} · ${new Date(a.timestamp).toLocaleString()}</em>
+              <em>${a.username} · ${a.timestamp ? new Date(a.timestamp).toLocaleString() : "Invalid Date"}</em>
               <span class="upvote" onclick="upvoteAnswer('${qId}', '${aId}')">👍 ${a.upvotes || 0}</span>
             </div>`;
           });
