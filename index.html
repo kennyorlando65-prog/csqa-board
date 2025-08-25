@@ -1,99 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
   <title>CSQA Board</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
-    input, button, textarea {
-      padding: 8px;
-      margin: 5px 0;
-      width: 100%;
-      font-size: 16px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-    }
-    .question, .answer {
-      background: white;
-      padding: 15px;
-      margin-bottom: 15px;
-      border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.1);
-    }
-    .answer {
-      margin-left: 20px;
-      background: #e8f5e9;
-      border-left: 3px solid #4caf50;
-    }
-    .upvote {
-      color: #4caf50;
-      cursor: pointer;
-      margin-left: 10px;
-    }
-    #leaderboard {
-      background: #f0f4ff;
-      padding: 1em;
-      border-radius: 8px;
-      margin-top: 2em;
-    }
-    #leaderboard-list li {
-      font-size: 1.1em;
-      margin: 0.3em 0;
-    }
-  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 </head>
 <body>
-  <h2>CSQA Board</h2>
-  <input type="text" id="username" placeholder="Your name">
-  <input type="text" id="questionInput" placeholder="Type your question here...">
+  <h1>CSQA Board</h1>
+  <input type="text" id="username" placeholder="Enter your name" />
+  <input type="text" id="questionInput" placeholder="Ask a question..." />
   <button onclick="postQuestion()">Post Question</button>
-  <hr>
-  <div id="questionsList"></div>
 
-  <div id="leaderboard">
-    <h2>🏆 Top Contributors</h2>
-    <ul id="leaderboard-list"></ul>
-  </div>
-
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <div id="questionsContainer"></div>
 
   <script>
+    // Firebase config
     const firebaseConfig = {
-      apiKey: "AIzaSyAg77QkSlVnxjAnA_AcpaLIUHnvWgMm6Xo",
-      authDomain: "csgroupqa.firebaseapp.com",
-      databaseURL: "https://csgroupqa-default-rtdb.firebaseio.com",
-      projectId: "csgroupqa",
-      storageBucket: "csgroupqa.appspot.com",
-      messagingSenderId: "761263870577",
-      appId: "1:761263870577:web:d914ef6e6d8f52785141d0"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      databaseURL: "YOUR_DATABASE_URL",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
-
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
     function postQuestion() {
+      const questionText = document.getElementById("questionInput").value.trim();
       const username = document.getElementById("username").value.trim();
-      const question = document.getElementById("questionInput").value.trim();
       const timestamp = new Date().toISOString();
 
-      if (username && question) {
-        const newRef = db.ref("questions").push();
-        newRef.set({ question, username, timestamp, answers: {} });
-
-        // Update leaderboard stats
-        const userRef = db.ref("users/" + username);
-        userRef.child("questionsAsked").transaction(q => (q || 0) + 1);
-        userRef.child("name").set(username);
-
+      if (questionText && username) {
+        db.ref("questions").push({
+          question: questionText,
+          username,
+          timestamp
+        });
         document.getElementById("questionInput").value = "";
       }
     }
@@ -115,70 +59,45 @@
       }
     }
 
-    function upvoteAnswer(qId, aId, answerUser) {
-      const ref = db.ref(`questions/${qId}/answers/${aId}/upvotes`);
-      ref.transaction(v => (v || 0) + 1);
-
-      // Update leaderboard stats
-      const userRef = db.ref("users/" + answerUser);
-      userRef.child("upvotesReceived").transaction(u => (u || 0) + 1);
-    }
-
     function loadQuestions() {
       db.ref("questions").on("value", snapshot => {
-        const container = document.getElementById("questionsList");
+        const container = document.getElementById("questionsContainer");
         container.innerHTML = "";
 
         snapshot.forEach(qSnap => {
-          const q = qSnap.val();
           const qId = qSnap.key;
+          const qData = qSnap.val();
 
-          let html = `<div class="question">
-            <strong>${q.question}</strong><br>
-            <em>${q.username} · ${new Date(q.timestamp).toLocaleString()}</em><br><br>
-            <input type="text" id="answerInput-${qId}" placeholder="Type your answer...">
-            <button onclick="postAnswer('${qId}')">Reply</button>`;
+          const qDiv = document.createElement("div");
+          qDiv.innerHTML = `
+            <p><strong>${qData.username}</strong> asked: ${qData.question}</p>
+            <input type="text" id="answerInput-${qId}" placeholder="Your answer..." />
+            <button onclick="postAnswer('${qId}')">Reply</button>
+            <div id="answers-${qId}"></div>
+            <hr/>
+          `;
+          container.appendChild(qDiv);
 
-          if (q.answers) {
-            Object.entries(q.answers).forEach(([aId, a]) => {
-              html += `<div class="answer">
-                ${a.text}<br>
-                <em>${a.username} · ${new Date(a.timestamp).toLocaleString()}</em>
-                <span class="upvote" onclick="upvoteAnswer('${qId}', '${aId}', '${a.username}')">👍 ${a.upvotes || 0}</span>
-              </div>`;
-            });
-          }
-
-          html += `</div>`;
-          container.innerHTML += html;
+          loadAnswers(qId);
         });
       });
     }
 
-    function loadLeaderboard() {
-      db.ref("users").once("value", snapshot => {
-        const users = [];
-        snapshot.forEach(userSnap => {
-          const data = userSnap.val();
-          const score = (data.questionsAsked || 0) + (data.upvotesReceived || 0) * 2;
-          users.push({ name: data.name, score });
-        });
+    function loadAnswers(qId) {
+      db.ref(`questions/${qId}/answers`).on("value", snapshot => {
+        const answersDiv = document.getElementById(`answers-${qId}`);
+        answersDiv.innerHTML = "";
 
-        users.sort((a, b) => b.score - a.score);
-        const list = document.getElementById("leaderboard-list");
-        list.innerHTML = "";
-        users.slice(0, 5).forEach((user, index) => {
-          const li = document.createElement("li");
-          li.textContent = `#${index + 1} ${user.name} — ${user.score} pts`;
-          list.appendChild(li);
+        snapshot.forEach(aSnap => {
+          const aData = aSnap.val();
+          const aDiv = document.createElement("div");
+          aDiv.innerHTML = `<p>💬 <strong>${aData.username}</strong>: ${aData.text}</p>`;
+          answersDiv.appendChild(aDiv);
         });
       });
     }
 
-    window.onload = function() {
-      loadQuestions();
-      loadLeaderboard();
-    };
+    loadQuestions();
   </script>
 </body>
 </html>
