@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Chat</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #2c3e50, #3498db);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .bubble {
+      max-width: 80%;
+      padding: 10px 15px;
+      margin: 10px;
+      border-radius: 20px;
+      position: relative;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .user {
+      background: #ffffff33;
+      align-self: flex-end;
+      text-align: right;
+    }
+
+    .ai {
+      background: #ffffff22;
+      align-self: flex-start;
+      text-align: left;
+    }
+
+    #inputBox {
+      display: flex;
+      padding: 10px;
+      background: #00000033;
+      position: sticky;
+      bottom: 0;
+    }
+
+    #input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 20px;
+      border: none;
+      outline: none;
+    }
+
+    #send {
+      margin-left: 10px;
+      padding: 10px 20px;
+      border-radius: 20px;
+      border: none;
+      background: #3498db;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #typing {
+      font-style: italic;
+      margin: 5px 15px;
+      opacity: 0.7;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div id="chat"></div>
+  <div id="typing" style="display:none;">AI is typing...</div>
+  <div id="inputBox">
+    <input type="text" id="input" placeholder="Type your message..." aria-label="Chat input" />
+    <button id="send" aria-label="Send message">Send</button>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const send = document.getElementById('send');
+    const typing = document.getElementById('typing');
+
+    function addBubble(text, sender) {
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${sender}`;
+      bubble.innerText = text;
+      chat.appendChild(bubble);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function realAIResponse(userText) {
+      typing.style.display = 'block';
+
+      try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer YOUR_API_KEY_HERE" // ⚠️ Replace with your API key (not safe on frontend)
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: userText }]
+          })
+        });
+
+        const data = await response.json();
+        const aiText = data?.choices?.[0]?.message?.content || "⚠️ AI didn't return a response.";
+        addBubble(aiText, 'ai');
+      } catch (error) {
+        addBubble("⚠️ Error: Couldn't reach AI. Check your connection or API key.", 'ai');
+        console.error(error);
+      } finally {
+        typing.style.display = 'none';
+      }
+    }
+
+    send.onclick = () => {
+      const text = input.value.trim();
+      if (text) {
+        addBubble(text, 'user');
+        input.value = '';
+        realAIResponse(text);
+      }
+    };
+
+    input.addEventListener('keypress', e => {
+      if (e.key === 'Enter') send.click();
+    });
+
+    // Auto-focus input when page loads
+    window.onload = () => input.focus();
+  </script>
+</body>
+</
