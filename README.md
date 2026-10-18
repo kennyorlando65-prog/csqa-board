@@ -1,2 +1,3 @@
 # index.html
-Real-time Q&amp;A board using Firebase and JavaScript
+
+I built a real-time Q&amp;A board using Firebase and JavaScript.
